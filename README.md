@@ -96,12 +96,11 @@ Os filtros de tempo ativo e CTA podem ser usados ao mesmo tempo.
 
 ## Arquivos
 
-- `content.js`: detecta vídeos e anúncios, cria os botões, badges e filtros.
-- `service-worker.js`: recebe as solicitações e inicia os downloads.
-- `styles.css`: estilos dos botões, filtros e badge de dias ativos.
+- `src/content.js`: detecta vídeos e anúncios, cria os botões, badges e filtros.
+- `src/service-worker.js`: recebe as solicitações e inicia os downloads.
+- `src/styles.css`: estilos dos botões, filtros e badge de dias ativos.
 - `manifest.json`: configuração da extensão, permissões, scripts e ícones.
-- `4669666172.png`: logo da extensão.
-- `content (1).js`: cópia de uma versão anterior do script de conteúdo.
+- `assets/logo.png`: logo da extensão.
 
 ## Observações
 

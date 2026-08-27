@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "description": "Baixa vídeos de anúncios exibidos na Meta Ads Library (uso pessoal).",
   "icons": {
-    "16": "4669666172.png",
-    "32": "4669666172.png",
-    "48": "4669666172.png",
-    "128": "4669666172.png"
+    "16": "assets/logo.png",
+    "32": "assets/logo.png",
+    "48": "assets/logo.png",
+    "128": "assets/logo.png"
   },
   "permissions": ["downloads"],
   "host_permissions": [
@@ -18,12 +18,12 @@
   "content_scripts": [
     {
       "matches": ["https://www.facebook.com/ads/library/*"],
-      "js": ["content.js"],
-      "css": ["styles.css"],
+      "js": ["src/content.js"],
+      "css": ["src/styles.css"],
       "run_at": "document_idle"
     }
   ],
   "background": {
-    "service_worker": "service-worker.js"
+    "service_worker": "src/service-worker.js"
   }
 }
