@@ -3,6 +3,12 @@
   "name": "Meta Ads Library Downloader",
   "version": "1.0.0",
   "description": "Baixa vídeos de anúncios exibidos na Meta Ads Library (uso pessoal).",
+  "icons": {
+    "16": "4669666172.png",
+    "32": "4669666172.png",
+    "48": "4669666172.png",
+    "128": "4669666172.png"
+  },
   "permissions": ["downloads"],
   "host_permissions": [
     "https://www.facebook.com/ads/library/*",
