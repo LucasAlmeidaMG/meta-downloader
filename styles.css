@@ -30,7 +30,15 @@
 
 /* Badge com a quantidade de dias que o anúncio está ativo */
 .meta-downloader-active-days {
-    margin-left: 8px;
+    min-width: 0;
+    margin-inline-start: 8px;
+    color: #006b4e !important;
+    font-family: Roboto, Arial, sans-serif !important;
+    font-size: 0.75rem !important;
+    font-weight: 700;
+    line-height: 1.33334 !important;
+    white-space: inherit;
+    word-wrap: normal;
     pointer-events: none;
 }
 
