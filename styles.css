@@ -67,6 +67,14 @@
     cursor: pointer;
 }
 
+.meta-downloader-filter-panel optgroup {
+    font-weight: 700;
+}
+
+.meta-downloader-filter-panel option[value^="category:"] {
+    font-weight: 700;
+}
+
 @media (max-width: 560px) {
     .meta-downloader-filter-panel {
         margin-inline-start: 8px;

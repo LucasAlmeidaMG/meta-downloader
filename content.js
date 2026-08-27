@@ -108,6 +108,72 @@ function scanVideos() {
 
 // Estado global do filtro (0 = "Todos")
 let currentFilterDays = 0;
+let currentFilterCta = "all";
+
+const CTA_GROUPS = [
+    {
+        key: "contact",
+        label: "Foco em contato",
+        items: ["Fale conosco", "Enviar mensagem", "Enviar mensagem pelo WhatsApp", "Enviar e-mail", "Ligar agora"]
+    },
+    {
+        key: "sales",
+        label: "Foco em conversão/vendas",
+        items: ["Comprar agora", "Pedir agora", "Fazer pedido", "Ver cardápio", "Ver ofertas", "Adicionar ao carrinho"]
+    },
+    {
+        key: "leads",
+        label: "Foco em cadastro/leads",
+        items: ["Cadastrar-se", "Inscrever-se", "Baixar", "Usar aplicativo"]
+    },
+    {
+        key: "engagement",
+        label: "Foco em engajamento/informação",
+        items: ["Saiba mais", "Assista ao vídeo", "Salvar", "Jogar"]
+    },
+    {
+        key: "local",
+        label: "Foco em local/evento",
+        items: ["Reserve agora", "Reservar agora", "Como chegar", "Visitar o perfil do Instagram"]
+    }
+];
+
+function normalizeCta(value) {
+    return (value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+}
+
+function getCtaDefinition(cta) {
+    const normalizedCta = normalizeCta(cta);
+    for (const group of CTA_GROUPS) {
+        if (group.items.some((item) => normalizeCta(item) === normalizedCta)) {
+            return { value: normalizedCta, category: group.key };
+        }
+    }
+    return null;
+}
+
+function extractCta(card) {
+    try {
+        const interactiveElements = card.querySelectorAll("a, button, [role='button']");
+        for (const element of interactiveElements) {
+            const candidates = [element.innerText, element.getAttribute("aria-label")];
+            for (const candidate of candidates) {
+                const definition = getCtaDefinition(candidate);
+                if (definition) {
+                    return { ...definition, label: candidate.trim() };
+                }
+            }
+        }
+    } catch (error) {
+        console.error("[Meta Downloader] Não foi possível extrair a CTA:", error);
+    }
+    return null;
+}
 
 // Meses abreviados em português usados pela Meta Ads Library
 const MONTHS_PT = {
@@ -283,27 +349,27 @@ function findActiveStatusContainer(card) {
  */
 function applyCardVisibility(card) {
     try {
-        if (currentFilterDays === 0) {
-            card.classList.remove("meta-downloader-hidden");
-            return;
+        let matchesDays = true;
+        let matchesCta = true;
+
+        if (currentFilterDays !== 0) {
+            const activeDaysAttr = card.dataset.metaDownloaderActiveDays;
+
+            // Data inválida ou ausente: nunca esconder silenciosamente.
+            if (activeDaysAttr !== undefined && activeDaysAttr !== "invalid") {
+                const activeDays = parseInt(activeDaysAttr, 10);
+                matchesDays = !Number.isNaN(activeDays) && activeDays >= currentFilterDays;
+            }
         }
 
-        const activeDaysAttr = card.dataset.metaDownloaderActiveDays;
-
-        // Data inválida ou ausente: nunca esconder silenciosamente.
-        if (activeDaysAttr === undefined || activeDaysAttr === "invalid") {
-            card.classList.remove("meta-downloader-hidden");
-            return;
+        if (currentFilterCta !== "all") {
+            const cta = card.dataset.metaDownloaderCta || "none";
+            matchesCta = currentFilterCta.startsWith("category:")
+                ? card.dataset.metaDownloaderCtaCategory === currentFilterCta.slice(9)
+                : cta === currentFilterCta.slice(4);
         }
 
-        const activeDays = parseInt(activeDaysAttr, 10);
-
-        if (Number.isNaN(activeDays)) {
-            card.classList.remove("meta-downloader-hidden");
-            return;
-        }
-
-        if (activeDays >= currentFilterDays) {
+        if (matchesDays && matchesCta) {
             card.classList.remove("meta-downloader-hidden");
         } else {
             card.classList.add("meta-downloader-hidden");
@@ -335,6 +401,7 @@ function applyActiveDaysFilter() {
 function processAdCard(card) {
     try {
         if (card.dataset.metaDownloaderAdProcessed === "true") {
+            applyCardVisibility(card);
             return;
         }
 
@@ -354,6 +421,10 @@ function processAdCard(card) {
         } else {
             card.dataset.metaDownloaderActiveDays = String(activeDays);
         }
+
+        const cta = extractCta(card);
+        card.dataset.metaDownloaderCta = cta?.value || "none";
+        card.dataset.metaDownloaderCtaCategory = cta?.category || "none";
 
         if (activeDays !== null && !card.querySelector(".meta-downloader-active-days")) {
             const activeStatus = findActiveStatusContainer(card);
@@ -492,6 +563,44 @@ function createActiveDaysFilter() {
 
             panel.appendChild(label);
             panel.appendChild(select);
+
+            const ctaLabel = document.createElement("label");
+            ctaLabel.textContent = "CTA: ";
+            ctaLabel.setAttribute("for", "meta-downloader-cta-select");
+
+            const ctaSelect = document.createElement("select");
+            ctaSelect.id = "meta-downloader-cta-select";
+
+            const allCtasOption = document.createElement("option");
+            allCtasOption.value = "all";
+            allCtasOption.textContent = "Todas";
+            ctaSelect.appendChild(allCtasOption);
+
+            CTA_GROUPS.forEach((group) => {
+                const categoryOption = document.createElement("option");
+                categoryOption.value = `category:${group.key}`;
+                categoryOption.textContent = group.label;
+                ctaSelect.appendChild(categoryOption);
+
+                const groupElement = document.createElement("optgroup");
+                groupElement.label = group.label;
+                group.items.forEach((item) => {
+                    const option = document.createElement("option");
+                    option.value = `cta:${normalizeCta(item)}`;
+                    option.textContent = item;
+                    groupElement.appendChild(option);
+                });
+                ctaSelect.appendChild(groupElement);
+            });
+
+            ctaSelect.value = currentFilterCta;
+            ctaSelect.addEventListener("change", () => {
+                currentFilterCta = ctaSelect.value;
+                applyActiveDaysFilter();
+            });
+
+            panel.appendChild(ctaLabel);
+            panel.appendChild(ctaSelect);
         }
 
         if (panel.parentElement !== statusRow) {
