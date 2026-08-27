@@ -247,9 +247,9 @@ function findAdCard(startElement) {
 /**
  * Cria (ou reaproveita) a badge de dias ativos para um card.
  */
-function createActiveDaysBadge(activeDays) {
-    const badge = document.createElement("span");
-    badge.className = "meta-downloader-active-days";
+function createActiveDaysBadge(activeDays, styleSource) {
+    const badge = styleSource.cloneNode(false);
+    badge.classList.add("meta-downloader-active-days");
     badge.textContent = activeDays >= 60 ? `🔥 ${activeDays} dias ativo` : `${activeDays} dias ativo`;
     return badge;
 }
@@ -263,7 +263,10 @@ function findActiveStatusContainer(card) {
             if (node.nodeValue?.trim().toLowerCase() === "ativo") {
                 const textElement = node.parentElement;
                 const statusContainer = textElement?.parentElement;
-                return statusContainer || textElement;
+                return {
+                    container: statusContainer || textElement,
+                    styleSource: textElement
+                };
             }
             node = walker.nextNode();
         }
@@ -353,9 +356,11 @@ function processAdCard(card) {
         }
 
         if (activeDays !== null && !card.querySelector(".meta-downloader-active-days")) {
-            const statusContainer = findActiveStatusContainer(card);
-            if (statusContainer) {
-                statusContainer.appendChild(createActiveDaysBadge(activeDays));
+            const activeStatus = findActiveStatusContainer(card);
+            if (activeStatus) {
+                activeStatus.container.appendChild(
+                    createActiveDaysBadge(activeDays, activeStatus.styleSource)
+                );
             }
         }
 

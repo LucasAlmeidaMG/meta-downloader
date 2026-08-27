@@ -30,44 +30,8 @@
 
 /* Badge com a quantidade de dias que o anúncio está ativo */
 .meta-downloader-active-days {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
     margin-left: 8px;
-    padding: 4px 8px;
-    background: rgba(17, 24, 39, 0.92);
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-left: 3px solid #31c48d;
-    border-radius: 6px;
-    font-size: 11px;
-    line-height: 1;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    letter-spacing: 0;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(5px);
     pointer-events: none;
-    vertical-align: middle;
-}
-
-.meta-downloader-active-days strong {
-    color: #7ee7b8;
-    font-size: 14px;
-    font-weight: 700;
-}
-
-.meta-downloader-active-days span {
-    color: rgba(255, 255, 255, 0.88);
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.meta-downloader-active-days--long {
-    border-left-color: #f5b942;
-}
-
-.meta-downloader-active-days--long strong {
-    color: #ffd166;
 }
 
 /* Painel fixo com o seletor de filtro por tempo de veiculação */
