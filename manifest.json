@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Meta Ads Library Downloader",
+  "version": "1.0.0",
+  "description": "Baixa vídeos de anúncios exibidos na Meta Ads Library (uso pessoal).",
+  "permissions": ["downloads"],
+  "host_permissions": [
+    "https://www.facebook.com/ads/library/*",
+    "https://scontent.xx.fbcdn.net/*",
+    "https://*.fbcdn.net/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.facebook.com/ads/library/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  }
+}

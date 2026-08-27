@@ -1,0 +1,487 @@
+// Meta Ads Library Downloader - content.js
+// Localiza vídeos na página, cria botões de download e envia a URL para o service worker.
+
+function getVideoUrl(video) {
+    try {
+        const url = video.currentSrc || video.src || "";
+        if (url && url.trim().length > 0) {
+            return url;
+        }
+        return null;
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+        return null;
+    }
+}
+
+function requestDownload(url) {
+    try {
+        chrome.runtime.sendMessage({
+            action: "downloadVideo",
+            url: url
+        });
+        console.log("[Meta Downloader] Download solicitado");
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+}
+
+function createDownloadButton(video, url) {
+    const button = document.createElement("button");
+    button.className = "meta-downloader-button";
+    button.type = "button";
+    button.textContent = "⬇ Baixar vídeo";
+
+    button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const currentUrl = getVideoUrl(video) || url;
+        if (!currentUrl) {
+            console.error("[Meta Downloader]", "URL do vídeo indisponível no momento do clique");
+            return;
+        }
+        requestDownload(currentUrl);
+    });
+
+    return button;
+}
+
+function processVideo(video) {
+    try {
+        // Evita duplicar botão se já processado
+        if (video.dataset.metaDownloaderProcessed === "true") {
+            return;
+        }
+
+        const url = getVideoUrl(video);
+
+        if (!url) {
+            // Ainda sem src/currentSrc, tenta novamente em uma próxima varredura
+            return;
+        }
+
+        // Evita duplicar botão caso já exista um irmão criado para este vídeo
+        const parent = video.parentElement;
+        if (!parent) {
+            return;
+        }
+
+        const alreadyHasButton = parent.querySelector(":scope > .meta-downloader-button");
+        if (alreadyHasButton) {
+            video.dataset.metaDownloaderProcessed = "true";
+            return;
+        }
+
+        const button = createDownloadButton(video, url);
+
+        // Garante que o container consiga posicionar o botão sobre/perto do vídeo
+        if (getComputedStyle(parent).position === "static") {
+            parent.style.position = "relative";
+        }
+
+        parent.appendChild(button);
+
+        // Só marca como processado permanentemente quando a URL válida foi obtida
+        video.dataset.metaDownloaderProcessed = "true";
+
+        console.log("[Meta Downloader] Vídeo encontrado:", url);
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+}
+
+function scanVideos() {
+    try {
+        const videos = document.querySelectorAll("video");
+        videos.forEach((video) => {
+            processVideo(video);
+        });
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+}
+
+// =====================================================================
+// Filtro por tempo de veiculação do anúncio
+// =====================================================================
+
+// Estado global do filtro (0 = "Todos")
+let currentFilterDays = 0;
+
+// Meses abreviados em português usados pela Meta Ads Library
+const MONTHS_PT = {
+    jan: 0,
+    fev: 1,
+    mar: 2,
+    abr: 3,
+    mai: 4,
+    jun: 5,
+    jul: 6,
+    ago: 7,
+    set: 8,
+    out: 9,
+    nov: 10,
+    dez: 11
+};
+
+/**
+ * Extrai o Library ID de um card, a partir do texto
+ * "Identificação da biblioteca: 1234567890"
+ */
+function extractLibraryId(card) {
+    try {
+        const text = card.innerText || "";
+        return text.match(/Identifica[cç][aã]o da biblioteca:\s*(\d+)/i)?.[1] || null;
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+        return null;
+    }
+}
+
+/**
+ * Extrai a data de início de veiculação a partir do texto do card.
+ * Formato esperado: "Veiculação iniciada em 19 de mar de 2026"
+ */
+function extractStartDate(card) {
+    try {
+        const text = card.innerText || "";
+
+        const match = text.match(
+            /Veicula[cç][aã]o iniciada em\s+(\d{1,2})\s+de\s+([a-zç]{3})\s+de\s+(\d{4})/i
+        );
+
+        if (!match) {
+            return null;
+        }
+
+        const [, day, month, year] = match;
+        const monthNumber = MONTHS_PT[month.toLowerCase()];
+
+        if (monthNumber === undefined) {
+            return null;
+        }
+
+        const date = new Date(Number(year), monthNumber, Number(day));
+
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+
+        return date;
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+        return null;
+    }
+}
+
+/**
+ * Calcula quantos dias inteiros se passaram desde startDate até hoje,
+ * comparando apenas as datas (sem horas/minutos).
+ */
+function calculateActiveDays(startDate) {
+    try {
+        if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+            return null;
+        }
+
+        const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        const diffMs = today.getTime() - start.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+        return diffDays >= 0 ? diffDays : null;
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+        return null;
+    }
+}
+
+/**
+ * Verifica se um elemento contém exatamente uma ocorrência de
+ * "Identificação da biblioteca:", indicando que representa um único anúncio.
+ */
+function hasSingleLibraryId(element) {
+    const text = element.innerText || "";
+    const ids = text.match(/Identifica[cç][aã]o da biblioteca:\s*\d+/gi) || [];
+    return ids.length === 1;
+}
+
+/**
+ * Sobe pela árvore DOM a partir de um elemento interno (ex: <video> ou o
+ * elemento que contém a data) até encontrar o menor container que ainda
+ * representa um único anúncio (exatamente 1 "Identificação da biblioteca"
+ * e contém "Veiculação iniciada em").
+ */
+function findAdCard(startElement) {
+    try {
+        let current = startElement;
+        let lastValid = null;
+
+        while (current && current !== document.body) {
+            const text = current.innerText || "";
+
+            const ids = text.match(/Identifica[cç][aã]o da biblioteca:\s*\d+/gi) || [];
+            const hasStartDate = /Veicula[cç][aã]o iniciada em/i.test(text);
+
+            if (ids.length === 1 && hasStartDate) {
+                lastValid = current;
+            }
+
+            if (ids.length > 1) {
+                break;
+            }
+
+            current = current.parentElement;
+        }
+
+        return lastValid;
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+        return null;
+    }
+}
+
+/**
+ * Cria (ou reaproveita) a badge de dias ativos para um card.
+ */
+function createActiveDaysBadge(activeDays) {
+    const badge = document.createElement("div");
+    badge.className = "meta-downloader-active-days";
+    badge.textContent = activeDays >= 60 ? `🔥 ${activeDays} dias ativo` : `${activeDays} dias ativo`;
+    return badge;
+}
+
+/**
+ * Aplica visibilidade a um card com base no filtro atual (currentFilterDays)
+ * e no valor de dias ativos já armazenado em dataset.
+ */
+function applyCardVisibility(card) {
+    try {
+        if (currentFilterDays === 0) {
+            card.classList.remove("meta-downloader-hidden");
+            return;
+        }
+
+        const activeDaysAttr = card.dataset.metaDownloaderActiveDays;
+
+        // Data inválida ou ausente: nunca esconder silenciosamente.
+        if (activeDaysAttr === undefined || activeDaysAttr === "invalid") {
+            card.classList.remove("meta-downloader-hidden");
+            return;
+        }
+
+        const activeDays = parseInt(activeDaysAttr, 10);
+
+        if (Number.isNaN(activeDays)) {
+            card.classList.remove("meta-downloader-hidden");
+            return;
+        }
+
+        if (activeDays >= currentFilterDays) {
+            card.classList.remove("meta-downloader-hidden");
+        } else {
+            card.classList.add("meta-downloader-hidden");
+        }
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+}
+
+/**
+ * Reaplica o filtro atualmente selecionado em todos os cards já processados.
+ */
+function applyActiveDaysFilter() {
+    try {
+        const cards = document.querySelectorAll('[data-meta-downloader-ad-processed="true"]');
+        cards.forEach((card) => {
+            applyCardVisibility(card);
+        });
+        console.log("[Meta Downloader] Filtro aplicado:", currentFilterDays === 0 ? "Todos" : `${currentFilterDays}+ dias`);
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+}
+
+/**
+ * Processa um card de anúncio: extrai ID/data, calcula dias ativos,
+ * cria a badge (sem duplicar) e aplica o filtro vigente.
+ */
+function processAdCard(card) {
+    try {
+        if (card.dataset.metaDownloaderAdProcessed === "true") {
+            return;
+        }
+
+        const libraryId = extractLibraryId(card);
+
+        if (!libraryId) {
+            // Ainda sem ID legível; tenta novamente em uma próxima varredura.
+            return;
+        }
+
+        const startDate = extractStartDate(card);
+        const activeDays = startDate ? calculateActiveDays(startDate) : null;
+
+        if (activeDays === null) {
+            card.dataset.metaDownloaderActiveDays = "invalid";
+            console.warn("[Meta Downloader] Não foi possível extrair a data de início do anúncio:", libraryId);
+        } else {
+            card.dataset.metaDownloaderActiveDays = String(activeDays);
+        }
+
+        // Evita duplicar a badge
+        const existingBadge = card.querySelector(":scope > .meta-downloader-active-days");
+        if (!existingBadge && activeDays !== null) {
+            if (getComputedStyle(card).position === "static") {
+                card.style.position = "relative";
+            }
+            const badge = createActiveDaysBadge(activeDays);
+            card.prepend(badge);
+        }
+
+        card.dataset.metaDownloaderLibraryId = libraryId;
+        card.dataset.metaDownloaderAdProcessed = "true";
+
+        applyCardVisibility(card);
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+}
+
+/**
+ * Localiza os pontos de ancoragem no DOM (texto "Veiculação iniciada em")
+ * usando um TreeWalker (mais leve do que varrer "*").
+ */
+function findDateAnchors() {
+    const anchors = [];
+
+    try {
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                if (node.nodeValue && node.nodeValue.includes("Veiculação iniciada em")) {
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+                return NodeFilter.FILTER_SKIP;
+            }
+        });
+
+        let node = walker.nextNode();
+        while (node) {
+            if (node.parentElement) {
+                anchors.push(node.parentElement);
+            }
+            node = walker.nextNode();
+        }
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+
+    return anchors;
+}
+
+/**
+ * Varre a página em busca de cards de anúncio ainda não processados.
+ */
+function scanAdCards() {
+    try {
+        const anchors = findDateAnchors();
+        const seenCards = new Set();
+
+        anchors.forEach((anchor) => {
+            const card = findAdCard(anchor);
+            if (card && !seenCards.has(card)) {
+                seenCards.add(card);
+                processAdCard(card);
+            }
+        });
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+}
+
+/**
+ * Cria a interface fixa do filtro de tempo de veiculação (uma única vez).
+ */
+function createActiveDaysFilter() {
+    try {
+        if (document.getElementById("meta-downloader-filter-panel")) {
+            return;
+        }
+
+        const panel = document.createElement("div");
+        panel.id = "meta-downloader-filter-panel";
+        panel.className = "meta-downloader-filter-panel";
+
+        const label = document.createElement("label");
+        label.textContent = "Tempo ativo: ";
+        label.setAttribute("for", "meta-downloader-filter-select");
+
+        const select = document.createElement("select");
+        select.id = "meta-downloader-filter-select";
+
+        const options = [
+            { value: "0", label: "Todos" },
+            { value: "10", label: "10+ dias" },
+            { value: "20", label: "20+ dias" },
+            { value: "30", label: "30+ dias" },
+            { value: "60", label: "60+ dias" },
+            { value: "90", label: "90+ dias" }
+        ];
+
+        options.forEach((opt) => {
+            const optionEl = document.createElement("option");
+            optionEl.value = opt.value;
+            optionEl.textContent = opt.label;
+            select.appendChild(optionEl);
+        });
+
+        select.value = String(currentFilterDays);
+
+        select.addEventListener("change", () => {
+            currentFilterDays = parseInt(select.value, 10) || 0;
+            applyActiveDaysFilter();
+        });
+
+        panel.appendChild(label);
+        panel.appendChild(select);
+        document.body.appendChild(panel);
+    } catch (error) {
+        console.error("[Meta Downloader]", error);
+    }
+}
+
+// =====================================================================
+// Inicialização
+// =====================================================================
+
+// Varredura inicial
+scanVideos();
+scanAdCards();
+createActiveDaysFilter();
+
+// Debounce das varreduras para evitar trabalho pesado a cada pequena mutação
+let scanTimeoutId = null;
+function scheduleScan() {
+    if (scanTimeoutId) {
+        clearTimeout(scanTimeoutId);
+    }
+    scanTimeoutId = setTimeout(() => {
+        scanVideos();
+        scanAdCards();
+        // Recria o painel se o Facebook remover/re-renderizar o body
+        createActiveDaysFilter();
+    }, 300);
+}
+
+// Observa mudanças no DOM (scroll infinito da Meta Ads Library)
+const observer = new MutationObserver(() => {
+    scheduleScan();
+});
+
+observer.observe(document.body, {
+    childList: true,
+    subtree: true
+});
