@@ -424,52 +424,79 @@ function scanAdCards() {
     }
 }
 
+function findStatusOnlineRow() {
+    try {
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let node = walker.nextNode();
+
+        while (node) {
+            if (node.nodeValue?.trim().toLowerCase() === "status online") {
+                const statusText = node.parentElement;
+                const statusContent = statusText?.parentElement;
+                return statusContent?.parentElement || statusContent || statusText;
+            }
+            node = walker.nextNode();
+        }
+    } catch (error) {
+        console.error("[Meta Downloader] Não foi possível localizar Status online:", error);
+    }
+
+    return null;
+}
+
 /**
- * Cria a interface fixa do filtro de tempo de veiculação (uma única vez).
+ * Cria a interface do filtro na mesma linha do status online.
  */
 function createActiveDaysFilter() {
     try {
-        if (document.getElementById("meta-downloader-filter-panel")) {
+        const statusRow = findStatusOnlineRow();
+        if (!statusRow) {
             return;
         }
 
-        const panel = document.createElement("div");
-        panel.id = "meta-downloader-filter-panel";
-        panel.className = "meta-downloader-filter-panel";
+        let panel = document.getElementById("meta-downloader-filter-panel");
+        if (!panel) {
+            panel = document.createElement("div");
+            panel.id = "meta-downloader-filter-panel";
+            panel.className = "meta-downloader-filter-panel";
 
-        const label = document.createElement("label");
-        label.textContent = "Tempo ativo: ";
-        label.setAttribute("for", "meta-downloader-filter-select");
+            const label = document.createElement("label");
+            label.textContent = "Tempo ativo: ";
+            label.setAttribute("for", "meta-downloader-filter-select");
 
-        const select = document.createElement("select");
-        select.id = "meta-downloader-filter-select";
+            const select = document.createElement("select");
+            select.id = "meta-downloader-filter-select";
 
-        const options = [
-            { value: "0", label: "Todos" },
-            { value: "10", label: "10+ dias" },
-            { value: "20", label: "20+ dias" },
-            { value: "30", label: "30+ dias" },
-            { value: "60", label: "60+ dias" },
-            { value: "90", label: "90+ dias" }
-        ];
+            const options = [
+                { value: "0", label: "Todos" },
+                { value: "10", label: "10+ dias" },
+                { value: "20", label: "20+ dias" },
+                { value: "30", label: "30+ dias" },
+                { value: "60", label: "60+ dias" },
+                { value: "90", label: "90+ dias" }
+            ];
 
-        options.forEach((opt) => {
-            const optionEl = document.createElement("option");
-            optionEl.value = opt.value;
-            optionEl.textContent = opt.label;
-            select.appendChild(optionEl);
-        });
+            options.forEach((opt) => {
+                const optionEl = document.createElement("option");
+                optionEl.value = opt.value;
+                optionEl.textContent = opt.label;
+                select.appendChild(optionEl);
+            });
 
-        select.value = String(currentFilterDays);
+            select.value = String(currentFilterDays);
 
-        select.addEventListener("change", () => {
-            currentFilterDays = parseInt(select.value, 10) || 0;
-            applyActiveDaysFilter();
-        });
+            select.addEventListener("change", () => {
+                currentFilterDays = parseInt(select.value, 10) || 0;
+                applyActiveDaysFilter();
+            });
 
-        panel.appendChild(label);
-        panel.appendChild(select);
-        document.body.appendChild(panel);
+            panel.appendChild(label);
+            panel.appendChild(select);
+        }
+
+        if (panel.parentElement !== statusRow) {
+            statusRow.appendChild(panel);
+        }
     } catch (error) {
         console.error("[Meta Downloader]", error);
     }
